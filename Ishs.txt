@@ -1,59 +1,79 @@
--- ===== ОБХОД СИСТЕМЫ КЛЮЧА =====
--- Ставим фиктивный ключ, чтобы блок free_key_ui.lua не запускался
-getgenv().LDKey = getgenv().LDKey or "bypass"
-getgenv().LD_KEY = getgenv().LD_KEY or "bypass"
-script_key = script_key or "bypass"
--- ===============================
+-- ========================================================
+-- 1. ПОДСТАНОВКА КЛЮЧЕЙ ВО ВСЕ ВОЗМОЖНЫЕ МЕСТА
+-- ========================================================
+getgenv().LDKey = "bypass"
+getgenv().LD_KEY = "bypass"
+getgenv().Key = "bypass"
+script_key = "bypass"
+shared.Key = "bypass"
 
+-- ========================================================
+-- 2. АНТИ-КИК ХУК (Блокирует вызов Player:Kick())
+-- ========================================================
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+
+local oldKick = LocalPlayer.Kick
+LocalPlayer.Kick = newcclosure(function(self, reason)
+    if self == LocalPlayer then
+        warn("[ANTI-KICK] Попытка кика заблокирована! Причина: " .. tostring(reason))
+        return nil -- Игнорируем кик
+    end
+    return oldKick(self, reason)
+end)
+
+-- Дополнительный хук через метаметод (на случай смены метода)
+local mt = getrawmetatable(game)
+setreadonly(mt, false)
+local oldNamecall = mt.__namecall
+mt.__namecall = newcclosure(function(self, ...)
+    local method = getnamecallmethod()
+    if method == "Kick" and self == LocalPlayer then
+        warn("[ANTI-KICK] Перехвачен Kick через __namecall!")
+        return nil
+    end
+    return oldNamecall(self, ...)
+end)
+
+-- ========================================================
+-- 3. РОУТИНГ ПО ИГРАМ (с передачей ключа "bypass")
+-- ========================================================
 if game.PlaceId == 13822889 then -- Lumber Tycoon 2 🌳
-    loadstring(game:HttpGet('https://raw.githubusercontent.com/kode-sec/Butter/refs/heads/main/LT2.lua'))("")
+    loadstring(game:HttpGet('https://raw.githubusercontent.com/kode-sec/Butter/refs/heads/main/LT2.lua'))("bypass")
 elseif game.PlaceId == 107535308163741 then -- Huss valley
-    loadstring(game:HttpGet("https://raw.githubusercontent.com/kode-sec/Butter/refs/heads/main/Huss.lua"))()
+    loadstring(game:HttpGet("https://raw.githubusercontent.com/kode-sec/Butter/refs/heads/main/Huss.lua"))("bypass")
 elseif game.PlaceId == 537413528 then -- Build A Boat For Treasure 🌊
     local function Discord()
         pcall(function()
             if isfile and writefile and not isfile('invited_butter.txt') then
                 writefile('invited_butter.txt', 'true')
                 local discordInvite = "https://discord.com/invite/EMBZ3yvQDm"
-
                 local http_request = (syn and syn.request) or (http and http.request) or request
                 if http_request then
                     http_request({
                         Url = "http://127.0.0.1:6463/rpc?v=1",
                         Method = "POST",
-                        Headers = {
-                            ["Content-Type"] = "application/json",
-                            ["Origin"] = "https://discord.com"
-                        },
+                        Headers = {["Content-Type"] = "application/json", ["Origin"] = "https://discord.com"},
                         Body = game:GetService("HttpService"):JSONEncode({
                             cmd = "INVITE_BROWSER",
-                            args = {
-                                code = string.match(discordInvite, "discord%.com/invite/(%w+)")
-                            },
+                            args = {code = string.match(discordInvite, "discord%.com/invite/(%w+)")},
                             nonce = game:GetService("HttpService"):GenerateGUID(false)
                         })
-                    })
-                else
-                    game:GetService("StarterGui"):SetCore("SendNotification", {
-                        Title = "Executor Not Supported",
-                        Text = "Join manually: " .. discordInvite,
-                        Duration = 5
                     })
                 end
             end
         end)
     end
     pcall(function() Discord() end)
-
-    loadstring(game:HttpGet("https://raw.githubusercontent.com/kode-sec/Butter/refs/heads/main/ButterCooked.lua"))()
+    loadstring(game:HttpGet("https://raw.githubusercontent.com/kode-sec/Butter/refs/heads/main/ButterCooked.lua"))("bypass")
 elseif game.PlaceId == 139542527731344 then -- fries game
-    loadstring(game:HttpGet('https://raw.githubusercontent.com/kode-sec/Butter/refs/heads/main/fries.lua'))("")
+    loadstring(game:HttpGet('https://raw.githubusercontent.com/kode-sec/Butter/refs/heads/main/fries.lua'))("bypass")
 elseif game.PlaceId == 94891079210424 then -- fries lobby
     game.Players.LocalPlayer:Kick("Please execute the script in the main game, not the lobby")
 elseif game.PlaceId == 139386728420706 then -- Dont splash game
-    loadstring(game:HttpGet('https://raw.githubusercontent.com/kode-sec/Butter/refs/heads/main/DontSplash.lua'))("")
+    loadstring(game:HttpGet('https://raw.githubusercontent.com/kode-sec/Butter/refs/heads/main/DontSplash.lua'))("bypass")
 elseif game.PlaceId == 119958473240233 then -- Dont splash lobby
     game.Players.LocalPlayer:Kick("Please execute the script in the main game, not the lobby")
 elseif game.PlaceId == 3351674303 then -- Driving Empire
-    loadstring(game:HttpGet('https://raw.githubusercontent.com/kode-sec/Butter/refs/heads/main/Butter%20revolt%20%2B%20Key%20sys-obfuscated.lua'))("")
+    loadstring(game:HttpGet('https://raw.githubusercontent.com/kode-sec/Butter/refs/heads/main/Butter%20revolt%20%2B%20Key%20sys-obfuscated.lua'))("bypass")
 end
