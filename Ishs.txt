@@ -1,27 +1,57 @@
 -- ========================================================
--- 1. БЛОКИРОВКА КИКА ЧЕРЕЗ МЕТАМЕТОД __namecall
+-- 1. КОМПЛЕКСНАЯ БЛОКИРОВКА КИКА
 -- ========================================================
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 
+-- Безопасное получение метода Kick через cloneref (если доступно)
+local kickFunc = LocalPlayer.Kick
+if cloneref then
+    local success, clonedPlayer = pcall(cloneref, LocalPlayer)
+    if success and clonedPlayer then
+        kickFunc = clonedPlayer.Kick
+    end
+end
+
+-- Хук на прямую функцию Kick (если она существует)
+if kickFunc and hookfunction then
+    local oldKick
+    oldKick = hookfunction(kickFunc, newcclosure(function(self, ...)
+        if self == LocalPlayer then
+            warn("[ANTI-KICK] Прямой вызов Kick заблокирован!")
+            return nil
+        end
+        return oldKick(self, ...)
+    end))
+end
+
+-- Хук на метаметоды __namecall и __index
 local mt = getrawmetatable(game)
 local oldNamecall = mt.__namecall
+local oldIndex = mt.__index
 setreadonly(mt, false)
 
 mt.__namecall = newcclosure(function(self, ...)
     local method = getnamecallmethod()
-    -- Перехватываем вызов Kick именно для нашего игрока
     if method == "Kick" and self == LocalPlayer then
-        warn("[ANTI-KICK] Попытка кика перехвачена и заблокирована!")
+        warn("[ANTI-KICK] Вызов Kick через : заблокирован!")
         return nil
     end
     return oldNamecall(self, ...)
 end)
 
+mt.__index = newcclosure(function(self, key)
+    if self == LocalPlayer and key == "Kick" then
+        warn("[ANTI-KICK] Попытка доступа к свойству Kick заблокирована!")
+        return function() end -- Возвращаем пустую функцию вместо ошибки
+    end
+    return oldIndex(self, key)
+end)
+
 setreadonly(mt, true)
 
 -- ========================================================
--- 2. ПОДСТАНОВКА КЛЮЧЕЙ (на случай повторных проверок)
+-- 2. ПОДСТАНОВКА КЛЮЧЕЙ
 -- ========================================================
 getgenv().LDKey = "bypass"
 getgenv().LD_KEY = "bypass"
@@ -30,7 +60,7 @@ script_key = "bypass"
 shared.Key = "bypass"
 
 -- ========================================================
--- 3. РОУТИНГ ПО ИГРАМ (с передачей "bypass" в аргументах)
+-- 3. РОУТИНГ ПО ИГРАМ
 -- ========================================================
 if game.PlaceId == 13822889 then -- Lumber Tycoon 2 🌳
     loadstring(game:HttpGet('https://raw.githubusercontent.com/kode-sec/Butter/refs/heads/main/LT2.lua'))("bypass")
