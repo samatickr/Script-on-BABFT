@@ -1,0 +1,82 @@
+--// Pine Tree Test Menu
+local Players = game:GetService("Players")
+local LP = Players.LocalPlayer
+local CoreGui = game:GetService("CoreGui")
+
+-- Убираем старое окно, если есть
+local old = CoreGui:FindFirstChild("PineTreeTestMenu")
+if old then old:Destroy() end
+
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "PineTreeTestMenu"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.IgnoreGuiInset = true
+pcall(function() ScreenGui.Parent = CoreGui end)
+if not ScreenGui.Parent then ScreenGui.Parent = LP:WaitForChild("PlayerGui") end
+
+local Frame = Instance.new("Frame", ScreenGui)
+Frame.Size = UDim2.new(0, 260, 0, 130)
+Frame.Position = UDim2.new(0.5, -130, 0.5, -65)
+Frame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+Frame.BorderSizePixel = 0
+Frame.Active = true
+Frame.Draggable = true
+Instance.new("UICorner", Frame).CornerRadius = UDim.new(0, 10)
+local stroke = Instance.new("UIStroke", Frame)
+stroke.Color = Color3.fromRGB(80, 200, 120)
+stroke.Thickness = 2
+
+local Title = Instance.new("TextLabel", Frame)
+Title.Size = UDim2.new(1, 0, 0, 28)
+Title.BackgroundTransparency = 1
+Title.Text = "Pine Tree Tester"
+Title.TextColor3 = Color3.fromRGB(80, 200, 120)
+Title.Font = Enum.Font.GothamBold
+Title.TextSize = 16
+
+local Status = Instance.new("TextLabel", Frame)
+Status.Size = UDim2.new(1, -20, 0, 24)
+Status.Position = UDim2.new(0, 10, 0, 32)
+Status.BackgroundTransparency = 1
+Status.Text = "Готов к тесту"
+Status.TextColor3 = Color3.fromRGB(220, 220, 220)
+Status.Font = Enum.Font.GothamMedium
+Status.TextSize = 12
+Status.TextWrapped = true
+
+local BuyBtn = Instance.new("TextButton", Frame)
+BuyBtn.Size = UDim2.new(1, -20, 0, 40)
+BuyBtn.Position = UDim2.new(0, 10, 0, 70)
+BuyBtn.BackgroundColor3 = Color3.fromRGB(40, 140, 80)
+BuyBtn.BorderSizePixel = 0
+BuyBtn.Text = "Купить Pine Tree"
+BuyBtn.TextColor3 = Color3.new(1, 1, 1)
+BuyBtn.Font = Enum.Font.GothamBold
+BuyBtn.TextSize = 14
+Instance.new("UICorner", BuyBtn).CornerRadius = UDim.new(0, 6)
+
+BuyBtn.MouseButton1Click:Connect(function()
+    Status.Text = "Попытка покупки..."
+    Status.TextColor3 = Color3.fromRGB(255, 200, 80)
+
+    local remote = workspace:FindFirstChild("ItemBoughtFromShop")
+    if not remote then
+        Status.Text = "❌ Remote ItemBoughtFromShop не найден"
+        Status.TextColor3 = Color3.fromRGB(255, 80, 80)
+        return
+    end
+
+    local ok, err = pcall(function()
+        remote:InvokeServer("PineTree", 1)
+    end)
+
+    if ok then
+        Status.Text = "✅ Запрос отправлен (PineTree x1)"
+        Status.TextColor3 = Color3.fromRGB(80, 220, 120)
+    else
+        Status.Text = "❌ Ошибка: " .. tostring(err)
+        Status.TextColor3 = Color3.fromRGB(255, 80, 80)
+    end
+end)
+
+print("[PineTree Tester] Загружен. Нажми кнопку в меню.")
