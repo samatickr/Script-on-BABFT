@@ -1,31 +1,38 @@
 -- ========================================================
--- 1. КОМПЛЕКСНАЯ БЛОКИРОВКА КИКА
+-- 1. ПОДМЕНА ОТВЕТА СЕРВЕРА ПРОВЕРКИ КЛЮЧА
+-- ========================================================
+local oldHttpGet = game.HttpGet
+game.HttpGet = function(self, url, ...)
+    -- Если скрипт пытается проверить ключ (ищем по ссылке)
+    if string.find(string.lower(url), "key") or string.find(string.lower(url), "validate") or string.find(string.lower(url), "butter") then
+        warn("[BYPASS] Перехвачен запрос ключа: " .. url)
+        -- Возвращаем фейковый успешный ответ
+        return '"true"' 
+    end
+    return oldHttpGet(self, url, ...)
+end
+
+-- Перехват request (на случай если используется Synapse/Http)
+local oldRequest = request or http_request or (syn and syn.request)
+if oldRequest then
+    local function newRequest(options)
+        if options and options.Url and (string.find(string.lower(options.Url), "key") or string.find(string.lower(options.Url), "validate") or string.find(string.lower(options.Url), "butter")) then
+            warn("[BYPASS] Перехвачен request ключа: " .. options.Url)
+            return {StatusCode = 200, Body = '"true"'}
+        end
+        return oldRequest(options)
+    end
+    if syn and syn.request then syn.request = newRequest end
+    if http and http.request then http.request = newRequest end
+    if request then request = newRequest end
+end
+
+
+-- ========================================================
+-- 2. КОМПЛЕКСНАЯ БЛОКИРОВКА КИКА (оставляем)
 -- ========================================================
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
-
--- Безопасное получение метода Kick через cloneref (если доступно)
-local kickFunc = LocalPlayer.Kick
-if cloneref then
-    local success, clonedPlayer = pcall(cloneref, LocalPlayer)
-    if success and clonedPlayer then
-        kickFunc = clonedPlayer.Kick
-    end
-end
-
--- Хук на прямую функцию Kick (если она существует)
-if kickFunc and hookfunction then
-    local oldKick
-    oldKick = hookfunction(kickFunc, newcclosure(function(self, ...)
-        if self == LocalPlayer then
-            warn("[ANTI-KICK] Прямой вызов Kick заблокирован!")
-            return nil
-        end
-        return oldKick(self, ...)
-    end))
-end
-
--- Хук на метаметоды __namecall и __index
 local mt = getrawmetatable(game)
 local oldNamecall = mt.__namecall
 local oldIndex = mt.__index
@@ -42,62 +49,23 @@ end)
 
 mt.__index = newcclosure(function(self, key)
     if self == LocalPlayer and key == "Kick" then
-        warn("[ANTI-KICK] Попытка доступа к свойству Kick заблокирована!")
-        return function() end -- Возвращаем пустую функцию вместо ошибки
+        return function() end 
     end
     return oldIndex(self, key)
 end)
-
 setreadonly(mt, true)
 
 -- ========================================================
--- 2. ПОДСТАНОВКА КЛЮЧЕЙ
--- ========================================================
-getgenv().LDKey = "bypass"
-getgenv().LD_KEY = "bypass"
-getgenv().Key = "bypass"
-script_key = "bypass"
-shared.Key = "bypass"
-
--- ========================================================
--- 3. РОУТИНГ ПО ИГРАМ
+-- 3. ЗАГРУЗКА СКРИПТА
 -- ========================================================
 if game.PlaceId == 13822889 then -- Lumber Tycoon 2 🌳
-    loadstring(game:HttpGet('https://raw.githubusercontent.com/kode-sec/Butter/refs/heads/main/LT2.lua'))("bypass")
+    loadstring(game:HttpGet('https://raw.githubusercontent.com/kode-sec/Butter/refs/heads/main/LT2.lua'))("")
 elseif game.PlaceId == 107535308163741 then -- Huss valley
-    loadstring(game:HttpGet("https://raw.githubusercontent.com/kode-sec/Butter/refs/heads/main/Huss.lua"))("bypass")
-elseif game.PlaceId == 537413528 then -- Build A Boat For Treasure 🌊
-    local function Discord()
-        pcall(function()
-            if isfile and writefile and not isfile('invited_butter.txt') then
-                writefile('invited_butter.txt', 'true')
-                local discordInvite = "https://discord.com/invite/EMBZ3yvQDm"
-                local http_request = (syn and syn.request) or (http and http.request) or request
-                if http_request then
-                    http_request({
-                        Url = "http://127.0.0.1:6463/rpc?v=1",
-                        Method = "POST",
-                        Headers = {["Content-Type"] = "application/json", ["Origin"] = "https://discord.com"},
-                        Body = game:GetService("HttpService"):JSONEncode({
-                            cmd = "INVITE_BROWSER",
-                            args = {code = string.match(discordInvite, "discord%.com/invite/(%w+)")},
-                            nonce = game:GetService("HttpService"):GenerateGUID(false)
-                        })
-                    })
-                end
-            end
-        end)
-    end
-    pcall(function() Discord() end)
-    loadstring(game:HttpGet("https://raw.githubusercontent.com/kode-sec/Butter/refs/heads/main/ButterCooked.lua"))("bypass")
+    loadstring(game:HttpGet("https://raw.githubusercontent.com/kode-sec/Butter/refs/heads/main/Huss.lua"))()
 elseif game.PlaceId == 139542527731344 then -- fries game
-    loadstring(game:HttpGet('https://raw.githubusercontent.com/kode-sec/Butter/refs/heads/main/fries.lua'))("bypass")
-elseif game.PlaceId == 94891079210424 then -- fries lobby
-    game.Players.LocalPlayer:Kick("Please execute the script in the main game, not the lobby")
+    loadstring(game:HttpGet('https://raw.githubusercontent.com/kode-sec/Butter/refs/heads/main/fries.lua'))("")
 elseif game.PlaceId == 139386728420706 then -- Dont splash game
-    loadstring(game:HttpGet('https://raw.githubusercontent.com/kode-sec/Butter/refs/heads/main/DontSplash.lua'))("bypass")
-elseif game.PlaceId == 119958473240233 then -- Dont splash lobby
-    game.Players.LocalPlayer:Kick("Please execute the script in the main game, not the lobby")
+    loadstring(game:HttpGet('https://raw.githubusercontent.com/kode-sec/Butter/refs/heads/main/DontSplash.lua'))("")
 elseif game.PlaceId == 3351674303 then -- Driving Empire
-    loadstring(game:HttpGet('https://raw.githubusercontent.com/kode-sec/Butter/refs/heads/main/Butter%20revolt%20%2B%20Key%20sys-obfuscated.lua'))("bypass")
+    loadstring(game:HttpGet('https://raw.githubusercontent.com/kode-sec/Butter/refs/heads/main/Butter%20revolt%20%2B%20Key%20sys-obfuscated.lua'))("")
 end
