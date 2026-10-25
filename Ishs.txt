@@ -1,5 +1,27 @@
 -- ========================================================
--- 1. ПОДСТАНОВКА КЛЮЧЕЙ ВО ВСЕ ВОЗМОЖНЫЕ МЕСТА
+-- 1. БЛОКИРОВКА КИКА ЧЕРЕЗ МЕТАМЕТОД __namecall
+-- ========================================================
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+
+local mt = getrawmetatable(game)
+local oldNamecall = mt.__namecall
+setreadonly(mt, false)
+
+mt.__namecall = newcclosure(function(self, ...)
+    local method = getnamecallmethod()
+    -- Перехватываем вызов Kick именно для нашего игрока
+    if method == "Kick" and self == LocalPlayer then
+        warn("[ANTI-KICK] Попытка кика перехвачена и заблокирована!")
+        return nil
+    end
+    return oldNamecall(self, ...)
+end)
+
+setreadonly(mt, true)
+
+-- ========================================================
+-- 2. ПОДСТАНОВКА КЛЮЧЕЙ (на случай повторных проверок)
 -- ========================================================
 getgenv().LDKey = "bypass"
 getgenv().LD_KEY = "bypass"
@@ -8,35 +30,7 @@ script_key = "bypass"
 shared.Key = "bypass"
 
 -- ========================================================
--- 2. АНТИ-КИК ХУК (Блокирует вызов Player:Kick())
--- ========================================================
-local Players = game:GetService("Players")
-local LocalPlayer = Players.LocalPlayer
-
-local oldKick = LocalPlayer.Kick
-LocalPlayer.Kick = newcclosure(function(self, reason)
-    if self == LocalPlayer then
-        warn("[ANTI-KICK] Попытка кика заблокирована! Причина: " .. tostring(reason))
-        return nil -- Игнорируем кик
-    end
-    return oldKick(self, reason)
-end)
-
--- Дополнительный хук через метаметод (на случай смены метода)
-local mt = getrawmetatable(game)
-setreadonly(mt, false)
-local oldNamecall = mt.__namecall
-mt.__namecall = newcclosure(function(self, ...)
-    local method = getnamecallmethod()
-    if method == "Kick" and self == LocalPlayer then
-        warn("[ANTI-KICK] Перехвачен Kick через __namecall!")
-        return nil
-    end
-    return oldNamecall(self, ...)
-end)
-
--- ========================================================
--- 3. РОУТИНГ ПО ИГРАМ (с передачей ключа "bypass")
+-- 3. РОУТИНГ ПО ИГРАМ (с передачей "bypass" в аргументах)
 -- ========================================================
 if game.PlaceId == 13822889 then -- Lumber Tycoon 2 🌳
     loadstring(game:HttpGet('https://raw.githubusercontent.com/kode-sec/Butter/refs/heads/main/LT2.lua'))("bypass")
