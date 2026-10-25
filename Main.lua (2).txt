@@ -1,0 +1,760 @@
+--// Services
+local Players = game:GetService("Players")
+local UIS = game:GetService("UserInputService")
+local LP = Players.LocalPlayer
+local RunService = game:GetService("RunService")
+local VirtualUser = game:GetService("VirtualUser")
+local Workspace = game:GetService("Workspace")
+
+--// Настройки
+local SPEED_VALUE = 50
+local JUMP_VALUE = 100
+local FLY_SPEED = 50
+
+local noclipEnabled = false
+local flyEnabled = false
+local antiAfkEnabled = true
+local espEnabled = false
+
+--// ФЛАГИ ФАРМА (Вынесены наверх, чтобы DESTROY их видел)
+local autofarm = false
+local halFarm = false
+local isFarmRunning = false
+
+local CURRENT_THEME = "default"
+local THEMES = {
+    default = { accent = Color3.fromRGB(255, 220, 0), bg = Color3.fromRGB(20, 20, 20), bgTitle = Color3.fromRGB(30, 30, 30), rowBg = Color3.fromRGB(35, 35, 35), text = Color3.fromRGB(255, 255, 255) },
+    halloween = { accent = Color3.fromRGB(255, 100, 0), bg = Color3.fromRGB(35, 15, 5), bgTitle = Color3.fromRGB(50, 20, 5), rowBg = Color3.fromRGB(55, 25, 10), text = Color3.fromRGB(255, 255, 255) },
+    newyear = { accent = Color3.fromRGB(120, 190, 255), bg = Color3.fromRGB(40, 55, 75), bgTitle = Color3.fromRGB(55, 75, 100), rowBg = Color3.fromRGB(50, 70, 95), text = Color3.fromRGB(240, 248, 255) },
+}
+
+local PROMO_CODES = {
+    {code = "=D", reward = "5 золота"}, {code = "=P", reward = "5 золота"}, {code = "HI", reward = "5 золота"},
+    {code = "Squid Army", reward = "22 золота + 22 блока льда"}, {code = "chillthrill709 was here", reward = "Бесплатные блоки"},
+}
+
+local FARM_START_TIME = 0
+local farmTimeElapsed = 0
+local currentGold = 0
+local startGold = 0
+local farmedGold = 0
+local halOldGravity = Workspace.Gravity
+
+local function updateGold()
+    local leaderstats = LP:FindFirstChild("leaderstats")
+    if leaderstats then
+        for _, v in ipairs(leaderstats:GetChildren()) do
+            if v:IsA("IntValue") or v:IsA("NumberValue") then
+                local n = v.Name:lower()
+                if n:find("gold") or n:find("coin") or n:find("cash") or n:find("золот") or n:find("money") then
+                    currentGold = v.Value
+                    return true
+                end
+            end
+        end
+    end
+    local data = LP:FindFirstChild("Data")
+    if data then
+        for _, v in ipairs(data:GetDescendants()) do
+            if v:IsA("IntValue") or v:IsA("NumberValue") then
+                local n = v.Name:lower()
+                if n:find("gold") or n:find("coin") or n:find("cash") or n:find("золот") or n:find("money") then
+                    currentGold = v.Value
+                    return true
+                end
+            end
+        end
+    end
+    return false
+end
+
+LP.Idled:Connect(function()
+    if antiAfkEnabled then VirtualUser:CaptureController(); VirtualUser:ClickButton2(Vector2.new()) end
+end)
+
+--// GUI
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "ChillHub"; ScreenGui.ResetOnSpawn = false; ScreenGui.IgnoreGuiInset = true
+pcall(function() ScreenGui.Parent = game:GetService("CoreGui") end)
+if not ScreenGui.Parent then ScreenGui.Parent = LP:WaitForChild("PlayerGui") end
+
+local MainFrame = Instance.new("Frame", ScreenGui)
+MainFrame.Size = UDim2.new(0, 320, 0, 472); MainFrame.Position = UDim2.new(0, 50, 0, 80)
+MainFrame.BackgroundColor3 = THEMES.default.bg; MainFrame.BorderSizePixel = 0; MainFrame.Active = true; MainFrame.Draggable = true
+Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 10)
+local MainStroke = Instance.new("UIStroke", MainFrame); MainStroke.Color = THEMES.default.accent; MainStroke.Thickness = 2
+
+local TitleBar = Instance.new("Frame", MainFrame)
+TitleBar.Size = UDim2.new(1, 0, 0, 46); TitleBar.BackgroundColor3 = THEMES.default.bgTitle; TitleBar.BorderSizePixel = 0
+Instance.new("UICorner", TitleBar).CornerRadius = UDim.new(0, 10)
+local TitleFix = Instance.new("Frame", TitleBar)
+TitleFix.Size = UDim2.new(1, 0, 0, 12); TitleFix.Position = UDim2.new(0, 0, 1, -12); TitleFix.BackgroundColor3 = THEMES.default.bgTitle; TitleFix.BorderSizePixel = 0
+
+local HubNameText = Instance.new("TextLabel", TitleBar)
+HubNameText.Size = UDim2.new(1, -100, 0, 20); HubNameText.Position = UDim2.new(0, 10, 0, 6); HubNameText.BackgroundTransparency = 1
+HubNameText.Text = "ChillHub"; HubNameText.TextColor3 = THEMES.default.accent; HubNameText.Font = Enum.Font.GothamBlack; HubNameText.TextSize = 16; HubNameText.TextXAlignment = Enum.TextXAlignment.Left
+
+local TitleText = Instance.new("TextLabel", TitleBar)
+TitleText.Size = UDim2.new(1, -100, 0, 16); TitleText.Position = UDim2.new(0, 10, 0, 24); TitleText.BackgroundTransparency = 1
+TitleText.Text = "Юзай с умом"; TitleText.TextColor3 = THEMES.default.text; TitleText.Font = Enum.Font.GothamBold; TitleText.TextSize = 11; TitleText.TextXAlignment = Enum.TextXAlignment.Left
+
+local SettingsBtn = Instance.new("TextButton", TitleBar)
+SettingsBtn.Size = UDim2.new(0, 28, 0, 22); SettingsBtn.Position = UDim2.new(1, -98, 0.5, -11); SettingsBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+SettingsBtn.Text = "⚙"; SettingsBtn.TextColor3 = Color3.new(1,1,1); SettingsBtn.Font = Enum.Font.GothamBold; SettingsBtn.TextSize = 14
+Instance.new("UICorner", SettingsBtn).CornerRadius = UDim.new(0, 5)
+
+local MinimizeBtn = Instance.new("TextButton", TitleBar)
+MinimizeBtn.Size = UDim2.new(0, 28, 0, 22); MinimizeBtn.Position = UDim2.new(1, -66, 0.5, -11); MinimizeBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+MinimizeBtn.Text = "—"; MinimizeBtn.TextColor3 = Color3.new(1,1,1); MinimizeBtn.Font = Enum.Font.GothamBold; MinimizeBtn.TextSize = 16
+Instance.new("UICorner", MinimizeBtn).CornerRadius = UDim.new(0, 5)
+
+local CloseBtn = Instance.new("TextButton", TitleBar)
+CloseBtn.Size = UDim2.new(0, 28, 0, 22); CloseBtn.Position = UDim2.new(1, -34, 0.5, -11); CloseBtn.BackgroundColor3 = Color3.fromRGB(180, 40, 40)
+CloseBtn.Text = "X"; CloseBtn.TextColor3 = Color3.new(1,1,1); CloseBtn.Font = Enum.Font.GothamBold; CloseBtn.TextSize = 16
+Instance.new("UICorner", CloseBtn).CornerRadius = UDim.new(0, 5)
+
+--// Табы
+local TabBar1 = Instance.new("Frame", MainFrame); TabBar1.Size = UDim2.new(1, -16, 0, 26); TabBar1.Position = UDim2.new(0, 8, 0, 52); TabBar1.BackgroundTransparency = 1
+local TL1 = Instance.new("UIListLayout", TabBar1); TL1.FillDirection = Enum.FillDirection.Horizontal; TL1.Padding = UDim.new(0, 4)
+local TabBar2 = Instance.new("Frame", MainFrame); TabBar2.Size = UDim2.new(1, -16, 0, 26); TabBar2.Position = UDim2.new(0, 8, 0, 82); TabBar2.BackgroundTransparency = 1
+local TL2 = Instance.new("UIListLayout", TabBar2); TL2.FillDirection = Enum.FillDirection.Horizontal; TL2.Padding = UDim.new(0, 4)
+
+local tabButtons = {}
+local activeTab = nil
+
+local function makeTab(parent, text, widthScale)
+    local tab = Instance.new("TextButton", parent)
+    tab.Size = UDim2.new(widthScale, -3, 1, 0); tab.BackgroundColor3 = Color3.fromRGB(45, 45, 45); tab.BorderSizePixel = 0
+    tab.Text = text; tab.TextColor3 = Color3.fromRGB(230, 230, 230); tab.Font = Enum.Font.GothamBold; tab.TextSize = 9
+    Instance.new("UICorner", tab).CornerRadius = UDim.new(0, 5)
+    table.insert(tabButtons, tab)
+    return tab
+end
+
+local TabMain      = makeTab(TabBar1, "ГЛАВНОЕ", 0.25)
+local TabDestroy   = makeTab(TabBar1, "DESTROY", 0.25)
+local TabPromo     = makeTab(TabBar1, "ПРОМО", 0.25)
+local TabAutoBuild = makeTab(TabBar1, "AUTO BILD", 0.25)
+local TabTips      = makeTab(TabBar2, "СОВЕТЫ", 0.33)
+local TabHalloween = makeTab(TabBar2, "HALLOWEEN", 0.33)
+local TabQuick     = makeTab(TabBar2, "БЫСТРЫЙ ДОСТУП", 0.34)
+
+local ContentHolder = Instance.new("Frame", MainFrame)
+ContentHolder.Size = UDim2.new(1, 0, 1, -114); ContentHolder.Position = UDim2.new(0, 0, 0, 112); ContentHolder.BackgroundTransparency = 1
+
+local function makePage()
+    local page = Instance.new("ScrollingFrame", ContentHolder)
+    page.Size = UDim2.new(1, 0, 1, 0); page.BackgroundTransparency = 1; page.BorderSizePixel = 0
+    page.ScrollBarThickness = 4; page.ScrollBarImageColor3 = THEMES.default.accent; page.CanvasSize = UDim2.new(0, 0, 0, 0); page.AutomaticCanvasSize = Enum.AutomaticSize.Y
+    page.Visible = false
+    local layout = Instance.new("UIListLayout", page); layout.Padding = UDim.new(0, 6); layout.SortOrder = Enum.SortOrder.LayoutOrder; layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+    local pad = Instance.new("UIPadding", page); pad.PaddingTop = UDim.new(0, 8); pad.PaddingBottom = UDim.new(0, 50); pad.PaddingLeft = UDim.new(0, 8); pad.PaddingRight = UDim.new(0, 8)
+    return page
+end
+
+local PageMain = makePage(); local PageDestroy = makePage(); local PagePromo = makePage(); local PageAutoBuild = makePage(); local PageTips = makePage(); local PageHalloween = makePage(); local PageQuick = makePage()
+local PageSettings = makePage() 
+
+local allPages = {PageMain, PageDestroy, PagePromo, PageAutoBuild, PageTips, PageHalloween, PageQuick, PageSettings}
+
+local function setActiveTab(tab, page)
+    for _, t in ipairs(tabButtons) do t.BackgroundColor3 = Color3.fromRGB(45, 45, 45); t.TextColor3 = Color3.fromRGB(230, 230, 230) end
+    if tab then tab.BackgroundColor3 = THEMES[CURRENT_THEME].accent; tab.TextColor3 = Color3.fromRGB(0, 0, 0) end
+    for _, p in ipairs(allPages) do p.Visible = false end
+    page.Visible = true; page.CanvasPosition = Vector2.new(0, 0); activeTab = tab
+end
+
+TabMain.MouseButton1Click:Connect(function() setActiveTab(TabMain, PageMain) end)
+TabDestroy.MouseButton1Click:Connect(function() setActiveTab(TabDestroy, PageDestroy) end)
+TabPromo.MouseButton1Click:Connect(function() setActiveTab(TabPromo, PagePromo) end)
+TabAutoBuild.MouseButton1Click:Connect(function() setActiveTab(TabAutoBuild, PageAutoBuild) end)
+TabTips.MouseButton1Click:Connect(function() setActiveTab(TabTips, PageTips) end)
+TabHalloween.MouseButton1Click:Connect(function() setActiveTab(TabHalloween, PageHalloween) end)
+TabQuick.MouseButton1Click:Connect(function() setActiveTab(TabQuick, PageQuick) end)
+SettingsBtn.MouseButton1Click:Connect(function() setActiveTab(nil, PageSettings) end) 
+
+setActiveTab(TabMain, PageMain)
+
+--// Хелперы
+local function makeRow(parent, name)
+    local Row = Instance.new("Frame", parent)
+    Row.Size = UDim2.new(1, 0, 0, 34); Row.BackgroundColor3 = THEMES[CURRENT_THEME].rowBg; Row.BorderSizePixel = 0
+    Instance.new("UICorner", Row).CornerRadius = UDim.new(0, 6)
+    local lbl = Instance.new("TextLabel", Row)
+    lbl.Size = UDim2.new(1, -100, 1, 0); lbl.Position = UDim2.new(0, 10, 0, 0); lbl.BackgroundTransparency = 1
+    lbl.Text = name; lbl.TextColor3 = THEMES[CURRENT_THEME].text; lbl.Font = Enum.Font.GothamBold; lbl.TextSize = 14; lbl.TextXAlignment = Enum.TextXAlignment.Left
+    return Row
+end
+
+local FlyToggleBtn, EspToggleBtn
+local function makeToggle(parent, initialState, callback)
+    local Btn = Instance.new("TextButton", parent)
+    Btn.Size = UDim2.new(0, 80, 0, 26); Btn.Position = UDim2.new(1, -88, 0.5, -13); Btn.BorderSizePixel = 0
+    Btn.Text = initialState and "Enable" or "Disable"; Btn.TextColor3 = Color3.new(1,1,1); Btn.Font = Enum.Font.GothamBold; Btn.TextSize = 12
+    Btn.BackgroundColor3 = initialState and Color3.fromRGB(60, 180, 60) or Color3.fromRGB(180, 50, 50)
+    Instance.new("UICorner", Btn).CornerRadius = UDim.new(0, 5)
+    
+    local state = initialState
+    Btn.MouseButton1Click:Connect(function()
+        state = not state
+        Btn.Text = state and "Enable" or "Disable"
+        Btn.BackgroundColor3 = state and Color3.fromRGB(60, 180, 60) or Color3.fromRGB(180, 50, 50)
+        if callback then callback(state) end
+    end)
+    return Btn
+end
+
+local function makeInputRow(parent, name, default, applyCallback)
+    local Row = makeRow(parent, name)
+    local Box = Instance.new("TextBox", Row)
+    Box.Size = UDim2.new(0, 70, 0, 26); Box.Position = UDim2.new(1, -180, 0.5, -13); Box.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+    Box.BorderSizePixel = 0; Box.Text = tostring(default); Box.TextColor3 = Color3.new(1,1,1); Box.Font = Enum.Font.GothamBold; Box.TextSize = 13; Box.ClearTextOnFocus = false
+    Instance.new("UICorner", Box).CornerRadius = UDim.new(0, 5)
+    local ApplyBtn = Instance.new("TextButton", Row)
+    ApplyBtn.Size = UDim2.new(0, 80, 0, 26); ApplyBtn.Position = UDim2.new(1, -104, 0.5, -13); ApplyBtn.BackgroundColor3 = Color3.fromRGB(0, 140, 220)
+    ApplyBtn.BorderSizePixel = 0; ApplyBtn.Text = "Применить"; ApplyBtn.TextColor3 = Color3.new(1,1,1); ApplyBtn.Font = Enum.Font.GothamBold; ApplyBtn.TextSize = 11
+    Instance.new("UICorner", ApplyBtn).CornerRadius = UDim.new(0, 5)
+    ApplyBtn.MouseButton1Click:Connect(function()
+        local num = tonumber(Box.Text)
+        if not num then Box.TextColor3 = Color3.fromRGB(255, 80, 80); task.wait(0.8); Box.TextColor3 = Color3.new(1,1,1); return end
+        applyCallback(num); ApplyBtn.Text = "✓ OK"; ApplyBtn.BackgroundColor3 = Color3.fromRGB(60, 180, 60)
+        task.wait(0.8); ApplyBtn.Text = "Применить"; ApplyBtn.BackgroundColor3 = Color3.fromRGB(0, 140, 220)
+    end)
+end
+
+--// ЛОГИКА ФЛАЯ
+local camera = workspace.CurrentCamera
+local flyKeys = {W=false, A=false, S=false, D=false, Space=false, Ctrl=false}
+local lastPos = nil
+
+UIS.InputBegan:Connect(function(input, gpe)
+    if gpe then return end
+    if input.KeyCode == Enum.KeyCode.W then flyKeys.W = true
+    elseif input.KeyCode == Enum.KeyCode.A then flyKeys.A = true
+    elseif input.KeyCode == Enum.KeyCode.S then flyKeys.S = true
+    elseif input.KeyCode == Enum.KeyCode.D then flyKeys.D = true
+    elseif input.KeyCode == Enum.KeyCode.Space then flyKeys.Space = true
+    elseif input.KeyCode == Enum.KeyCode.LeftControl then flyKeys.Ctrl = true end
+end)
+UIS.InputEnded:Connect(function(input)
+    if input.KeyCode == Enum.KeyCode.W then flyKeys.W = false
+    elseif input.KeyCode == Enum.KeyCode.A then flyKeys.A = false
+    elseif input.KeyCode == Enum.KeyCode.S then flyKeys.S = false
+    elseif input.KeyCode == Enum.KeyCode.D then flyKeys.D = false
+    elseif input.KeyCode == Enum.KeyCode.Space then flyKeys.Space = false
+    elseif input.KeyCode == Enum.KeyCode.LeftControl then flyKeys.Ctrl = false end
+end)
+
+local FlyControls = Instance.new("Frame", ScreenGui)
+FlyControls.Size = UDim2.new(0, 340, 0, 160); FlyControls.Position = UDim2.new(0.5, -170, 1, -180); FlyControls.BackgroundTransparency = 1; FlyControls.Visible = false
+local function makeFlyBtn(text, size, pos, key)
+    local b = Instance.new("TextButton", FlyControls)
+    b.Size = size; b.Position = pos; b.BackgroundColor3 = THEMES[CURRENT_THEME].accent; b.BackgroundTransparency = 0.15; b.BorderSizePixel = 0
+    b.Text = text; b.TextColor3 = Color3.new(0,0,0); b.Font = Enum.Font.GothamBold; b.TextSize = 24; b.AutoButtonColor = false
+    Instance.new("UICorner", b).CornerRadius = UDim.new(0, 8)
+    b.MouseButton1Down:Connect(function() flyKeys[key] = true; b.BackgroundColor3 = THEMES[CURRENT_THEME].accent:Lerp(Color3.new(0,0,0), 0.2) end)
+    b.MouseButton1Up:Connect(function() flyKeys[key] = false; b.BackgroundColor3 = THEMES[CURRENT_THEME].accent end)
+    b.MouseLeave:Connect(function() flyKeys[key] = false; b.BackgroundColor3 = THEMES[CURRENT_THEME].accent end)
+end
+local BTN = UDim2.new(0, 70, 0, 70); local GAP = 8
+makeFlyBtn("W", BTN, UDim2.new(0, 0, 0, 0), "W"); makeFlyBtn("A", BTN, UDim2.new(0, 78, 0, 0), "A"); makeFlyBtn("S", BTN, UDim2.new(0, 156, 0, 0), "S"); makeFlyBtn("D", BTN, UDim2.new(0, 234, 0, 0), "D")
+makeFlyBtn("SPACE", UDim2.new(0, 304, 0, 55), UDim2.new(0, 0, 0, 78), "Space")
+
+--// ГЛАВНАЯ
+makeInputRow(PageMain, "Скорость", SPEED_VALUE, function(v) SPEED_VALUE = v; local c = LP.Character; if c and c:FindFirstChildOfClass("Humanoid") then c:FindFirstChildOfClass("Humanoid").WalkSpeed = v end end)
+makeInputRow(PageMain, "Прыжок", JUMP_VALUE, function(v) JUMP_VALUE = v; local c = LP.Character; if c and c:FindFirstChildOfClass("Humanoid") then c:FindFirstChildOfClass("Humanoid").JumpPower = v end end)
+makeInputRow(PageMain, "Fly Speed", FLY_SPEED, function(v) FLY_SPEED = v end)
+
+makeToggle(makeRow(PageMain, "Noclip"), noclipEnabled, function(s) noclipEnabled = s end)
+
+FlyToggleBtn = makeToggle(makeRow(PageMain, "Fly"), false, function(s)
+    flyEnabled = s; FlyControls.Visible = s
+    if qpFlyBtn then qpFlyBtn.Text = s and "Fly: ON" or "Fly: OFF"; qpFlyBtn.BackgroundColor3 = s and Color3.fromRGB(60, 180, 60) or Color3.fromRGB(180, 50, 50) end
+    if not s then
+        flyKeys.W=false; flyKeys.A=false; flyKeys.S=false; flyKeys.D=false; flyKeys.Space=false; flyKeys.Ctrl=false
+        local c = LP.Character; if c and c:FindFirstChildOfClass("Humanoid") then c:FindFirstChildOfClass("Humanoid").PlatformStand = false; c:FindFirstChildOfClass("Humanoid"):ChangeState(Enum.HumanoidStateType.GettingUp) end
+    else lastPos = nil end
+end)
+
+makeToggle(makeRow(PageMain, "Anti-AFK"), antiAfkEnabled, function(s) antiAfkEnabled = s end)
+
+--// AUTO FARM + ESP
+local farmHeader = Instance.new("TextLabel", PageMain)
+farmHeader.Size = UDim2.new(1, 0, 0, 24); farmHeader.BackgroundTransparency = 1
+farmHeader.Text = "🌾 АВТО-ФАРМ"; farmHeader.Font = Enum.Font.GothamBold; farmHeader.TextSize = 14; farmHeader.TextXAlignment = Enum.TextXAlignment.Left
+farmHeader.TextColor3 = THEMES[CURRENT_THEME].accent 
+
+local farmIndex = 1
+local function toggleAutoFarm(s)
+    autofarm = s
+    if s then
+        updateGold()
+        startGold = currentGold
+        isFarmRunning = true
+        farmIndex = 1
+        FARM_START_TIME = tick() - farmTimeElapsed 
+        
+        halOldGravity = Workspace.Gravity
+        Workspace.Gravity = 0
+        
+        if FarmToggleQp then FarmToggleQp.Text = "Auto Farm: ON"; FarmToggleQp.BackgroundColor3 = Color3.fromRGB(60, 180, 60) end
+    else
+        isFarmRunning = false
+        farmTimeElapsed = tick() - FARM_START_TIME 
+        
+        Workspace.Gravity = halOldGravity
+        
+        if FarmToggleQp then FarmToggleQp.Text = "Auto Farm: OFF"; FarmToggleQp.BackgroundColor3 = Color3.fromRGB(180, 50, 50) end
+    end
+end
+
+local AutoFarmBtn = makeToggle(makeRow(PageMain, "Auto Farm"), false, toggleAutoFarm)
+
+local espHighlights = {}
+EspToggleBtn = makeToggle(makeRow(PageMain, "ESP игроков"), false, function(s)
+    espEnabled = s
+    if qpEspBtn then qpEspBtn.Text = "ESP: " .. (s and "ON" or "OFF"); qpEspBtn.BackgroundColor3 = s and Color3.fromRGB(60, 180, 60) or Color3.fromRGB(180, 50, 50) end
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= LP then
+            if s and p.Character then local hl = Instance.new("Highlight", p.Character); hl.FillColor = Color3.fromRGB(255, 60, 60); hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop; espHighlights[p] = hl
+            elseif not s and espHighlights[p] then espHighlights[p]:Destroy(); espHighlights[p] = nil end
+        end
+    end
+end)
+
+task.spawn(function()
+    while true do
+        task.wait()
+        if autofarm then
+            local char = LP.Character
+            local hrp = char and char:FindFirstChild("HumanoidRootPart")
+            local hum = char and char:FindFirstChildOfClass("Humanoid")
+            if hrp and hum then
+                local targetCF = nil
+                if farmIndex == 11 then
+                    local chest = Workspace:FindFirstChild("BoatStages") and Workspace.BoatStages:FindFirstChild("NormalStages") and Workspace.BoatStages.NormalStages:FindFirstChild("TheEnd") and Workspace.BoatStages.NormalStages.TheEnd:FindFirstChild("GoldenChest")
+                    if chest then targetCF = chest:GetPivot() + Vector3.new(0, 0, -10) end
+                else
+                    local stage = Workspace:FindFirstChild("BoatStages") and Workspace.BoatStages:FindFirstChild("NormalStages") and Workspace.BoatStages.NormalStages:FindFirstChild("CaveStage" .. farmIndex)
+                    local darkPart = stage and stage:FindFirstChild("DarknessPart")
+                    if darkPart then targetCF = darkPart.CFrame + Vector3.new(0, 0, 20) end
+                end
+
+                if targetCF then
+                    hrp.CFrame = targetCF
+                    hrp.Velocity = Vector3.zero
+                    hrp.AssemblyLinearVelocity = Vector3.zero
+                    hum.PlatformStand = true 
+                    
+                    task.wait(2)
+                    
+                    hum.PlatformStand = false
+                    if farmIndex == 11 then farmIndex = 1 else farmIndex += 1 end
+                else
+                    task.wait(0.5) 
+                end
+            end
+        end
+    end
+end)
+
+--// DESTROY (ПОЛНАЯ ОСТАНОВКА)
+local destroyHeader = Instance.new("TextLabel", PageDestroy)
+destroyHeader.Size = UDim2.new(1, 0, 0, 22); destroyHeader.BackgroundTransparency = 1
+destroyHeader.Text = "💥 DESTROY"; destroyHeader.TextColor3 = Color3.fromRGB(255, 80, 80); destroyHeader.Font = Enum.Font.GothamBold; destroyHeader.TextSize = 14
+
+local DestroyScriptBtn = Instance.new("TextButton", PageDestroy)
+DestroyScriptBtn.Size = UDim2.new(1, 0, 0, 60); DestroyScriptBtn.BackgroundColor3 = Color3.fromRGB(200, 30, 30)
+DestroyScriptBtn.Text = "💀 DESTROY SCRIPT 💀"; DestroyScriptBtn.TextColor3 = Color3.new(1,1,1); DestroyScriptBtn.Font = Enum.Font.GothamBold; DestroyScriptBtn.TextSize = 16
+Instance.new("UICorner", DestroyScriptBtn).CornerRadius = UDim.new(0, 8)
+
+local destroyWarning = Instance.new("TextLabel", PageDestroy)
+destroyWarning.Size = UDim2.new(1, 0, 0, 20); destroyWarning.BackgroundTransparency = 1
+destroyWarning.Text = "Останавливает все процессы и удаляет скрипт"; destroyWarning.TextColor3 = Color3.fromRGB(255, 100, 100); destroyWarning.Font = Enum.Font.GothamBold; destroyWarning.TextSize = 11; destroyWarning.TextWrapped = true
+
+DestroyScriptBtn.MouseButton1Click:Connect(function()
+    -- Останавливаем автофарм
+    if autofarm then autofarm = false; Workspace.Gravity = halOldGravity; isFarmRunning = false end
+    
+    -- Останавливаем полет
+    if flyEnabled then
+        flyEnabled = false; FlyControls.Visible = false
+        flyKeys.W=false; flyKeys.A=false; flyKeys.S=false; flyKeys.D=false; flyKeys.Space=false; flyKeys.Ctrl=false
+        local c = LP.Character; if c and c:FindFirstChildOfClass("Humanoid") then c:FindFirstChildOfClass("Humanoid").PlatformStand = false; c:FindFirstChildOfClass("Humanoid"):ChangeState(Enum.HumanoidStateType.GettingUp) end
+    end
+    
+    -- Выключаем Noclip
+    if noclipEnabled then
+        noclipEnabled = false
+        local c = LP.Character; if c then for _, p in ipairs(c:GetDescendants()) do if p:IsA("BasePart") then p.CanCollide = true end end end
+    end
+    
+    -- Убираем ESP
+    if espEnabled then
+        espEnabled = false
+        for p, hl in pairs(espHighlights) do if hl and hl.Parent then hl:Destroy() end; espHighlights[p] = nil end
+    end
+    
+    -- Останавливаем фарм конфет (теперь переменная видна!)
+    if halFarm then
+        halFarm = false
+        local hum = LP.Character and LP.Character:FindFirstChildOfClass("Humanoid")
+        if hum then hum.PlatformStand = false; hum.WalkSpeed = SPEED_VALUE; hum.JumpPower = JUMP_VALUE end
+    end
+
+    local originalPos = MainFrame.Position
+    local shakeOffsets = { UDim2.new(0, 8, 0, 0), UDim2.new(0, -8, 0, 0), UDim2.new(0, 0, 0, 8), UDim2.new(0, 0, 0, -8), UDim2.new(0, 6, 0, 6), UDim2.new(0, -6, 0, -6), UDim2.new(0, 6, 0, -6), UDim2.new(0, -6, 0, 6) }
+    for i = 1, 12 do
+        local offset = shakeOffsets[(i - 1) % #shakeOffsets + 1]
+        MainFrame.Position = UDim2.new(originalPos.X.Scale, originalPos.X.Offset + offset.X.Offset, originalPos.Y.Scale, originalPos.Y.Offset + offset.Y.Offset)
+        task.wait(0.04)
+    end
+    MainFrame.Position = originalPos
+    for i = 1, 4 do MainFrame.BackgroundColor3 = Color3.fromRGB(120, 0, 0); task.wait(0.06); MainFrame.BackgroundColor3 = THEMES[CURRENT_THEME].bg; task.wait(0.06) end
+    for i = 1, 15 do
+        local scale = 1 - (i / 15)
+        MainFrame.Size = UDim2.new(0, 320 * scale, 0, 472 * scale); MainFrame.BackgroundTransparency = 1 - scale
+        MainFrame.Position = UDim2.new(MainFrame.Position.X.Scale, MainFrame.Position.X.Offset + 5, MainFrame.Position.Y.Scale, MainFrame.Position.Y.Offset + 5)
+        task.wait(0.02)
+    end
+    ScreenGui:Destroy(); print("[ChillHub] 💀 ВСЕ ПРОЦЕССЫ ОСТАНОВЛЕНЫ")
+end)
+
+--// ПРОМО
+for i, data in ipairs(PROMO_CODES) do
+    local r = makeRow(PagePromo, "#"..i.." | "..data.code)
+    local btn = Instance.new("TextButton", r); btn.Size = UDim2.new(0, 90, 0, 28); btn.Position = UDim2.new(1, -98, 0.5, -14)
+    btn.BackgroundColor3 = Color3.fromRGB(0, 140, 220); btn.Text = "Копировать"; btn.TextColor3 = Color3.new(1,1,1); btn.Font = Enum.Font.GothamBold; btn.TextSize = 11
+    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 5)
+    btn.MouseButton1Click:Connect(function()
+        if setclipboard then setclipboard(data.code) end
+        btn.Text = "✓ Копия"; btn.BackgroundColor3 = Color3.fromRGB(60, 180, 60); task.wait(1); btn.Text = "Копировать"; btn.BackgroundColor3 = Color3.fromRGB(0, 140, 220)
+    end)
+end
+
+--// АВТО-ВВОД ПРОМОКОДОВ
+local autoPromoBtn = Instance.new("TextButton", PagePromo)
+autoPromoBtn.Size = UDim2.new(1, 0, 0, 40); autoPromoBtn.BackgroundColor3 = Color3.fromRGB(180, 100, 200)
+autoPromoBtn.Text = "🤖 АВТО-ВВОД (попытка)"; autoPromoBtn.TextColor3 = Color3.new(1,1,1); autoPromoBtn.Font = Enum.Font.GothamBold; autoPromoBtn.TextSize = 12
+Instance.new("UICorner", autoPromoBtn).CornerRadius = UDim.new(0, 6)
+
+autoPromoBtn.MouseButton1Click:Connect(function()
+    autoPromoBtn.Text = "⏳ Поиск поля..."
+    local found = false
+    local playerGui = LP:FindFirstChild("PlayerGui")
+    if not playerGui then autoPromoBtn.Text = "❌ PlayerGui не найден"; task.wait(2); autoPromoBtn.Text = "🤖 АВТО-ВВОД (попытка)"; return end
+    
+    for _, desc in ipairs(playerGui:GetDescendants()) do
+        if desc:IsA("TextBox") then
+            local parentName = desc.Parent and desc.Parent.Name or ""
+            local placeholder = desc.PlaceholderText or ""
+            if parentName:lower():find("code") or parentName:lower():find("promo") or placeholder:lower():find("code") or placeholder:lower():find("введите") then
+                found = true
+                autoPromoBtn.Text = "✅ Поле найдено!"
+                task.wait(0.5)
+                for _, data in ipairs(PROMO_CODES) do
+                    desc.Text = data.code
+                    desc:CaptureFocus()
+                    task.wait(0.3)
+                    desc:ReleaseFocus(true) 
+                    task.wait(1) 
+                end
+                autoPromoBtn.Text = "✅ Готово (проверь награды)"
+                task.wait(2)
+                autoPromoBtn.Text = "🤖 АВТО-ВВОД (попытка)"
+                return
+            end
+        end
+    end
+    
+    if not found then
+        autoPromoBtn.Text = "❌ Поле не найдено (открой Settings)"
+        task.wait(2)
+        autoPromoBtn.Text = "🤖 АВТО-ВВОД (попытка)"
+    end
+end)
+
+--// AUTO BILD
+local abHeader = Instance.new("TextLabel", PageAutoBuild)
+abHeader.Size = UDim2.new(1, 0, 0, 22); abHeader.BackgroundTransparency = 1
+abHeader.Text = "🏗 AUTO BILD"; abHeader.TextColor3 = Color3.fromRGB(100, 200, 255); abHeader.Font = Enum.Font.GothamBold; abHeader.TextSize = 14
+local abInfo = Instance.new("TextLabel", PageAutoBuild)
+abInfo.Size = UDim2.new(1, 0, 0, 30); abInfo.BackgroundTransparency = 1
+abInfo.Text = "⚠️ Внимание! Перед использованием прочти правила."; abInfo.TextColor3 = Color3.fromRGB(255, 200, 80); abInfo.Font = Enum.Font.Gotham; abInfo.TextSize = 11; abInfo.TextWrapped = true
+local abBtn = Instance.new("TextButton", PageAutoBuild)
+abBtn.Size = UDim2.new(1, 0, 0, 60); abBtn.BackgroundColor3 = Color3.fromRGB(0, 140, 220)
+abBtn.Text = "⚙️ ВКЛЮЧИТЬ AUTO BILD"; abBtn.TextColor3 = Color3.new(1,1,1); abBtn.Font = Enum.Font.GothamBold; abBtn.TextSize = 14
+Instance.new("UICorner", abBtn).CornerRadius = UDim.new(0, 8)
+
+local WarningGui = Instance.new("Frame", ScreenGui)
+WarningGui.Size = UDim2.new(0, 300, 0, 400); WarningGui.Position = UDim2.new(0.5, -150, 0.5, -200)
+WarningGui.BackgroundColor3 = Color3.fromRGB(30, 15, 15); WarningGui.BorderSizePixel = 0; WarningGui.Visible = false; WarningGui.Active = true
+Instance.new("UICorner", WarningGui).CornerRadius = UDim.new(0, 12)
+Instance.new("UIStroke", WarningGui).Color = Color3.fromRGB(255, 60, 60)
+local WgTitle = Instance.new("TextLabel", WarningGui)
+WgTitle.Size = UDim2.new(1, 0, 0, 40); WgTitle.BackgroundColor3 = Color3.fromRGB(180, 30, 30); WgTitle.BorderSizePixel = 0
+WgTitle.Text = "⚠️ ПРОЧТИ ЭТО ⚠️"; WgTitle.TextColor3 = Color3.new(1,1,1); WgTitle.Font = Enum.Font.GothamBold; WgTitle.TextSize = 15
+Instance.new("UICorner", WgTitle).CornerRadius = UDim.new(0, 12)
+local WgScroll = Instance.new("ScrollingFrame", WarningGui)
+WgScroll.Size = UDim2.new(1, -16, 1, -130); WgScroll.Position = UDim2.new(0, 8, 0, 48)
+WgScroll.BackgroundTransparency = 1; WgScroll.BorderSizePixel = 0; WgScroll.ScrollBarThickness = 5; WgScroll.ScrollBarImageColor3 = Color3.fromRGB(255, 80, 80)
+WgScroll.CanvasSize = UDim2.new(0, 0, 0, 0); WgScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+Instance.new("UIListLayout", WgScroll).Padding = UDim.new(0, 8)
+local function makeWgBlock(text, color, bgColor)
+    local b = Instance.new("Frame", WgScroll); b.Size = UDim2.new(1, 0, 0, 130); b.BackgroundColor3 = bgColor; b.BorderSizePixel = 0
+    Instance.new("UICorner", b).CornerRadius = UDim.new(0, 6); Instance.new("UIStroke", b).Color = color
+    local lbl = Instance.new("TextLabel", b); lbl.Size = UDim2.new(1, -16, 1, -16); lbl.Position = UDim2.new(0, 8, 0, 8)
+    lbl.BackgroundTransparency = 1; lbl.Text = text; lbl.TextColor3 = Color3.new(1,1,1); lbl.Font = Enum.Font.Gotham; lbl.TextSize = 11
+    lbl.TextWrapped = true; lbl.TextXAlignment = Enum.TextXAlignment.Left; lbl.TextYAlignment = Enum.TextYAlignment.Top
+end
+makeWgBlock("🚫 НЕ ВОРУЙ ПОСТРОЙКИ ДРУГИХ\n\nКаждая постройка — это труд игрока. Взять чужое = украсть чужой труд.\n\nЭто подло и неуважительно. Играй честно!", Color3.fromRGB(220, 80, 80), Color3.fromRGB(60, 20, 20))
+makeWgBlock("⚙️ ПОЧЕМУ ЗДЕСЬ НЕТ AUTO BILD\n\nAUTO BILD — автоматическая постройка. Звучит удобно, НО:\n\n• Ты НЕ учишься строить сам\n• Теряется весь смысл игры (творить!)\n\nСтрой сам — это и есть игра! 🛠", Color3.fromRGB(220, 180, 80), Color3.fromRGB(60, 45, 20))
+makeWgBlock("✅ ЧТО ЗДЕСЬ МОЖНО\n\n• Летать (Fly) — для исследования\n• Скорость / прыжок — для удобства\n• Noclip — чтобы не застрять\n\nВсё для удобства, а не для читерства!", Color3.fromRGB(80, 220, 80), Color3.fromRGB(20, 55, 20))
+local WgTimer = Instance.new("TextLabel", WarningGui)
+WgTimer.Size = UDim2.new(1, -16, 0, 30); WgTimer.Position = UDim2.new(0, 8, 1, -78); WgTimer.BackgroundColor3 = Color3.fromRGB(50, 25, 25); WgTimer.BorderSizePixel = 0
+WgTimer.Text = "⏳ Подожди 15 секунд..."; WgTimer.TextColor3 = Color3.fromRGB(255, 200, 80); WgTimer.Font = Enum.Font.GothamBold; WgTimer.TextSize = 13
+Instance.new("UICorner", WgTimer).CornerRadius = UDim.new(0, 6)
+local WgCloseBtn = Instance.new("TextButton", WarningGui)
+WgCloseBtn.Size = UDim2.new(1, -16, 0, 32); WgCloseBtn.Position = UDim2.new(0, 8, 1, -42); WgCloseBtn.BackgroundColor3 = Color3.fromRGB(60, 30, 30); WgCloseBtn.BorderSizePixel = 0
+WgCloseBtn.Text = "❌ ЗАКРЫТЬ (недоступно)"; WgCloseBtn.TextColor3 = Color3.fromRGB(150, 100, 100); WgCloseBtn.Font = Enum.Font.GothamBold; WgCloseBtn.TextSize = 13; WgCloseBtn.Visible = false
+Instance.new("UICorner", WgCloseBtn).CornerRadius = UDim.new(0, 6)
+WgCloseBtn.MouseButton1Click:Connect(function() WarningGui.Visible = false end)
+abBtn.MouseButton1Click:Connect(function()
+    WarningGui.Visible = true; WgCloseBtn.Visible = false; WgCloseBtn.Text = "❌ ЗАКРЫТЬ (недоступно)"; WgCloseBtn.TextColor3 = Color3.fromRGB(150, 100, 100); WgCloseBtn.BackgroundColor3 = Color3.fromRGB(60, 30, 30)
+    WgTimer.TextColor3 = Color3.fromRGB(255, 200, 80); WgScroll.CanvasPosition = Vector2.new(0, 0)
+    task.spawn(function()
+        for i = 15, 1, -1 do WgTimer.Text = "⏳ Подожди " .. i .. " сек..."; task.wait(1) end
+        WgTimer.Text = "✅ Теперь можно закрыть!"; WgTimer.TextColor3 = Color3.fromRGB(100, 255, 100)
+        WgCloseBtn.Visible = true; WgCloseBtn.Text = "❌ ЗАКРЫТЬ"; WgCloseBtn.TextColor3 = Color3.new(1,1,1); WgCloseBtn.BackgroundColor3 = Color3.fromRGB(180, 40, 40)
+    end)
+end)
+
+--// СОВЕТЫ
+local tipsHeader = Instance.new("TextLabel", PageTips)
+tipsHeader.Size = UDim2.new(1, 0, 0, 24); tipsHeader.BackgroundTransparency = 1
+tipsHeader.Text = "💡 ПОЛЕЗНЫЕ СОВЕТЫ"; tipsHeader.TextColor3 = Color3.fromRGB(100, 200, 255); tipsHeader.Font = Enum.Font.GothamBold; tipsHeader.TextSize = 14
+local TgBtn = Instance.new("TextButton", PageTips)
+TgBtn.Size = UDim2.new(1, 0, 0, 40); TgBtn.BackgroundColor3 = Color3.fromRGB(0, 136, 204)
+TgBtn.Text = "📢 Telegram: t.me/hack_40454"; TgBtn.TextColor3 = Color3.new(1,1,1); TgBtn.Font = Enum.Font.GothamBold; TgBtn.TextSize = 13
+Instance.new("UICorner", TgBtn).CornerRadius = UDim.new(0, 6)
+TgBtn.MouseButton1Click:Connect(function() if setclipboard then setclipboard("https://t.me/hack_40454") end; TgBtn.Text = "✅ Скопировано!"; TgBtn.BackgroundColor3 = Color3.fromRGB(60, 180, 60); task.wait(2); TgBtn.Text = "📢 Telegram: t.me/hack_40454"; TgBtn.BackgroundColor3 = Color3.fromRGB(0, 136, 204) end)
+local TtBtn = Instance.new("TextButton", PageTips)
+TtBtn.Size = UDim2.new(1, 0, 0, 40); TtBtn.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+TtBtn.Text = "🎵 TikTok: @hack_40454"; TtBtn.TextColor3 = Color3.new(1,1,1); TtBtn.Font = Enum.Font.GothamBold; TtBtn.TextSize = 13
+Instance.new("UICorner", TtBtn).CornerRadius = UDim.new(0, 6)
+TtBtn.MouseButton1Click:Connect(function() if setclipboard then setclipboard("https://www.tiktok.com/@hack_40454") end; TtBtn.Text = "✅ Скопировано!"; TtBtn.BackgroundColor3 = Color3.fromRGB(60, 180, 60); task.wait(2); TtBtn.Text = "🎵 TikTok: @hack_40454"; TtBtn.BackgroundColor3 = Color3.fromRGB(0, 0, 0) end)
+
+--// HALLOWEEN (Сам фарм)
+makeToggle(makeRow(PageHalloween, "Auto Farm (Trick or Treat)"), false, function(s)
+    halFarm = s; local hum = LP.Character and LP.Character:FindFirstChildOfClass("Humanoid")
+    if s then if hum then hum.PlatformStand = true; hum.WalkSpeed = 0; hum.JumpPower = 0 end
+    else if hum then hum.PlatformStand = false; hum.WalkSpeed = SPEED_VALUE; hum.JumpPower = JUMP_VALUE; hum:ChangeState(Enum.HumanoidStateType.GettingUp) end end
+end)
+task.spawn(function()
+    while true do
+        task.wait(0.1)
+        if halFarm then
+            local hrp = LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
+            if hrp then
+                for _, obj in ipairs(Workspace:GetDescendants()) do
+                    if obj.Name == "DoorInnerTouch" and obj:IsA("BasePart") then
+                        if not halFarm then break end
+                        hrp.CFrame = CFrame.new(obj.Position)
+                        hrp.Velocity = Vector3.zero
+                        hrp.AssemblyLinearVelocity = Vector3.zero
+                        task.wait(0.5)
+                        hrp.CFrame = CFrame.new(obj.Position + Vector3.new(0, 20, 0))
+                        hrp.Velocity = Vector3.zero
+                        task.wait(0.2)
+                    end
+                end
+            end
+        end
+    end
+end)
+
+--// ОКНО НАСТРОЕК
+local setHeader = Instance.new("TextLabel", PageSettings)
+setHeader.Size = UDim2.new(1, 0, 0, 24); setHeader.BackgroundTransparency = 1
+setHeader.Text = "⚙️ НАСТРОЙКИ"; setHeader.TextColor3 = Color3.fromRGB(200, 200, 200); setHeader.Font = Enum.Font.GothamBold; setHeader.TextSize = 14
+
+local themeHeader = Instance.new("TextLabel", PageSettings)
+themeHeader.Size = UDim2.new(1, 0, 0, 20); themeHeader.BackgroundTransparency = 1
+themeHeader.Text = "🎨 ТЕМА ОФОРМЛЕНИЯ"; themeHeader.TextColor3 = Color3.fromRGB(200, 200, 200); themeHeader.Font = Enum.Font.GothamBold; themeHeader.TextSize = 12
+
+local themeRow = Instance.new("Frame", PageSettings)
+themeRow.Size = UDim2.new(1, 0, 0, 34); themeRow.BackgroundTransparency = 1
+local themeLayout = Instance.new("UIListLayout", themeRow); themeLayout.FillDirection = Enum.FillDirection.Horizontal; themeLayout.Padding = UDim.new(0, 4)
+
+local function applyTheme()
+    local t = THEMES[CURRENT_THEME]
+    MainFrame.BackgroundColor3 = t.bg; MainStroke.Color = t.accent
+    TitleBar.BackgroundColor3 = t.bgTitle; TitleFix.BackgroundColor3 = t.bgTitle
+    HubNameText.TextColor3 = t.accent
+    TitleText.TextColor3 = t.text
+    QuickPanel.BackgroundColor3 = t.bg; qpTitleBar.BackgroundColor3 = t.bgTitle; qpStroke.Color = t.accent
+    qpSpeedRow.BackgroundColor3 = t.rowBg; qpCounters.BackgroundColor3 = t.rowBg
+    if farmHeader then farmHeader.TextColor3 = t.accent end
+    for _, row in ipairs(PageQuick:GetChildren()) do if row:IsA("Frame") and row.BackgroundColor3 ~= Color3.fromRGB(60, 180, 60) and row.BackgroundColor3 ~= Color3.fromRGB(180, 50, 50) then if row.BackgroundColor3 ~= Color3.fromRGB(0, 140, 220) then row.BackgroundColor3 = t.rowBg end end end
+    for _, tab in ipairs(tabButtons) do if tab == activeTab then tab.BackgroundColor3 = t.accent end end
+    for _, child in ipairs(FlyControls:GetChildren()) do if child:IsA("TextButton") then child.BackgroundColor3 = t.accent end end
+end
+
+local function makeThemeBtn(text, themeName, color)
+    local b = Instance.new("TextButton", themeRow)
+    b.Size = UDim2.new(0.333, -3, 1, 0); b.BackgroundColor3 = color; b.BorderSizePixel = 0
+    b.Text = text; b.TextColor3 = Color3.fromRGB(0, 0, 0); b.Font = Enum.Font.GothamBold; b.TextSize = 9
+    Instance.new("UICorner", b).CornerRadius = UDim.new(0, 5)
+    b.MouseButton1Click:Connect(function() CURRENT_THEME = themeName; applyTheme() end)
+end
+makeThemeBtn("Обычная", "default", Color3.fromRGB(255, 220, 0))
+makeThemeBtn("Хэллоуин", "halloween", Color3.fromRGB(255, 100, 0))
+makeThemeBtn("Новый год", "newyear", Color3.fromRGB(120, 190, 255))
+
+local backBtn = Instance.new("TextButton", PageSettings)
+backBtn.Size = UDim2.new(1, 0, 0, 40); backBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+backBtn.Text = "⬅ НАЗАД"; backBtn.TextColor3 = Color3.new(1,1,1); backBtn.Font = Enum.Font.GothamBold; backBtn.TextSize = 12
+Instance.new("UICorner", backBtn).CornerRadius = UDim.new(0, 6)
+backBtn.MouseButton1Click:Connect(function() setActiveTab(TabMain, PageMain) end)
+
+--// БЫСТРЫЙ ДОСТУП
+local QuickPanel = Instance.new("Frame", ScreenGui)
+QuickPanel.Size = UDim2.new(0, 150, 0, 200); QuickPanel.Position = UDim2.new(0, 20, 0, 100)
+QuickPanel.BackgroundColor3 = THEMES[CURRENT_THEME].bg; QuickPanel.BorderSizePixel = 0; QuickPanel.Active = true; QuickPanel.Draggable = true; QuickPanel.Visible = false
+Instance.new("UICorner", QuickPanel).CornerRadius = UDim.new(0, 10)
+local qpStroke = Instance.new("UIStroke", QuickPanel); qpStroke.Color = THEMES[CURRENT_THEME].accent
+
+local qpTitleBar = Instance.new("Frame", QuickPanel)
+qpTitleBar.Size = UDim2.new(1, 0, 0, 22); qpTitleBar.BackgroundColor3 = THEMES[CURRENT_THEME].bgTitle; qpTitleBar.BorderSizePixel = 0
+Instance.new("UICorner", qpTitleBar).CornerRadius = UDim.new(0, 10)
+local qpTitleLbl = Instance.new("TextLabel", qpTitleBar); qpTitleLbl.Size = UDim2.new(1, -24, 1, 0); qpTitleLbl.Position = UDim2.new(0, 4, 0, 0); qpTitleLbl.BackgroundTransparency = 1
+qpTitleLbl.Text = "⚡ МИНИ-МЕНЮ"; qpTitleLbl.TextColor3 = Color3.new(1,1,1); qpTitleLbl.Font = Enum.Font.GothamBold; qpTitleLbl.TextSize = 9; qpTitleLbl.TextXAlignment = Enum.TextXAlignment.Left
+
+local qpClose = Instance.new("TextButton", qpTitleBar)
+qpClose.Size = UDim2.new(0, 18, 0, 16); qpClose.Position = UDim2.new(1, -20, 0.5, -8)
+qpClose.BackgroundColor3 = Color3.fromRGB(180, 40, 40); qpClose.Text = "X"; qpClose.TextColor3 = Color3.new(1,1,1); qpClose.Font = Enum.Font.GothamBold; qpClose.TextSize = 10
+Instance.new("UICorner", qpClose).CornerRadius = UDim.new(0, 4)
+qpClose.MouseButton1Click:Connect(function() QuickPanel.Visible = false end)
+
+local qpContent = Instance.new("Frame", QuickPanel)
+qpContent.Size = UDim2.new(1, -8, 1, -26); qpContent.Position = UDim2.new(0, 4, 0, 24); qpContent.BackgroundTransparency = 1
+Instance.new("UIListLayout", qpContent).Padding = UDim.new(0, 4)
+
+FarmToggleQp = Instance.new("TextButton", qpContent)
+FarmToggleQp.Size = UDim2.new(1, 0, 0, 22); FarmToggleQp.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+FarmToggleQp.Text = "Auto Farm: OFF"; FarmToggleQp.TextColor3 = Color3.new(1,1,1); FarmToggleQp.Font = Enum.Font.GothamBold; FarmToggleQp.TextSize = 10
+Instance.new("UICorner", FarmToggleQp).CornerRadius = UDim.new(0, 4)
+FarmToggleQp.MouseButton1Click:Connect(function()
+    local isNow = not autofarm
+    toggleAutoFarm(isNow)
+    AutoFarmBtn.Text = isNow and "Enable" or "Disable"
+    AutoFarmBtn.BackgroundColor3 = isNow and Color3.fromRGB(60, 180, 60) or Color3.fromRGB(180, 50, 50)
+end)
+
+qpFlyBtn = Instance.new("TextButton", qpContent)
+qpFlyBtn.Size = UDim2.new(1, 0, 0, 22); qpFlyBtn.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+qpFlyBtn.Text = "Fly: OFF"; qpFlyBtn.TextColor3 = Color3.new(1,1,1); qpFlyBtn.Font = Enum.Font.GothamBold; qpFlyBtn.TextSize = 10
+Instance.new("UICorner", qpFlyBtn).CornerRadius = UDim.new(0, 4)
+qpFlyBtn.MouseButton1Click:Connect(function()
+    flyEnabled = not flyEnabled; FlyControls.Visible = flyEnabled
+    qpFlyBtn.Text = flyEnabled and "Fly: ON" or "Fly: OFF"; qpFlyBtn.BackgroundColor3 = flyEnabled and Color3.fromRGB(60, 180, 60) or Color3.fromRGB(180, 50, 50)
+    if FlyToggleBtn then FlyToggleBtn.Text = flyEnabled and "Enable" or "Disable"; FlyToggleBtn.BackgroundColor3 = flyEnabled and Color3.fromRGB(60, 180, 60) or Color3.fromRGB(180, 50, 50) end
+    if not flyEnabled then
+        flyKeys.W=false; flyKeys.A=false; flyKeys.S=false; flyKeys.D=false; flyKeys.Space=false; flyKeys.Ctrl=false
+        local c = LP.Character; if c and c:FindFirstChildOfClass("Humanoid") then c:FindFirstChildOfClass("Humanoid").PlatformStand = false; c:FindFirstChildOfClass("Humanoid"):ChangeState(Enum.HumanoidStateType.GettingUp) end
+    else lastPos = nil end
+end)
+
+local qpSpeedRow = Instance.new("Frame", qpContent)
+qpSpeedRow.Size = UDim2.new(1, 0, 0, 22); qpSpeedRow.BackgroundColor3 = THEMES[CURRENT_THEME].rowBg; qpSpeedRow.BorderSizePixel = 0
+Instance.new("UICorner", qpSpeedRow).CornerRadius = UDim.new(0, 4)
+
+local qpSpeedLbl = Instance.new("TextLabel", qpSpeedRow)
+qpSpeedLbl.Size = UDim2.new(0, 60, 1, 0); qpSpeedLbl.Position = UDim2.new(0, 4, 0, 0); qpSpeedLbl.BackgroundTransparency = 1
+qpSpeedLbl.Text = "Ввести скорость"; qpSpeedLbl.TextColor3 = THEMES[CURRENT_THEME].text; qpSpeedLbl.Font = Enum.Font.GothamBold; qpSpeedLbl.TextSize = 9; qpSpeedLbl.TextXAlignment = Enum.TextXAlignment.Left
+
+local qpSpeedBox = Instance.new("TextBox", qpSpeedRow)
+qpSpeedBox.Size = UDim2.new(0, 30, 0, 16); qpSpeedBox.Position = UDim2.new(1, -50, 0.5, -8); qpSpeedBox.BackgroundColor3 = Color3.fromRGB(25, 25, 25); qpSpeedBox.Text = tostring(FLY_SPEED); qpSpeedBox.TextColor3 = Color3.new(1,1,1); qpSpeedBox.Font = Enum.Font.GothamBold; qpSpeedBox.TextSize = 10
+Instance.new("UICorner", qpSpeedBox).CornerRadius = UDim.new(0, 3)
+local qpSpeedOk = Instance.new("TextButton", qpSpeedRow)
+qpSpeedOk.Size = UDim2.new(0, 20, 0, 16); qpSpeedOk.Position = UDim2.new(1, -22, 0.5, -8); qpSpeedOk.BackgroundColor3 = Color3.fromRGB(0, 140, 220); qpSpeedOk.Text = "OK"; qpSpeedOk.TextColor3 = Color3.new(1,1,1); qpSpeedOk.Font = Enum.Font.GothamBold; qpSpeedOk.TextSize = 9
+Instance.new("UICorner", qpSpeedOk).CornerRadius = UDim.new(0, 3)
+qpSpeedOk.MouseButton1Click:Connect(function() local n = tonumber(qpSpeedBox.Text); if n then FLY_SPEED = n; qpSpeedOk.BackgroundColor3 = Color3.fromRGB(60, 180, 60); task.wait(0.5); qpSpeedOk.BackgroundColor3 = Color3.fromRGB(0, 140, 220) end end)
+
+qpEspBtn = Instance.new("TextButton", qpContent)
+qpEspBtn.Size = UDim2.new(1, 0, 0, 22); qpEspBtn.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+qpEspBtn.Text = "ESP: OFF"; qpEspBtn.TextColor3 = Color3.new(1,1,1); qpEspBtn.Font = Enum.Font.GothamBold; qpEspBtn.TextSize = 10
+Instance.new("UICorner", qpEspBtn).CornerRadius = UDim.new(0, 4)
+qpEspBtn.MouseButton1Click:Connect(function()
+    espEnabled = not espEnabled; qpEspBtn.Text = "ESP: " .. (espEnabled and "ON" or "OFF"); qpEspBtn.BackgroundColor3 = espEnabled and Color3.fromRGB(60, 180, 60) or Color3.fromRGB(180, 50, 50)
+    if EspToggleBtn then EspToggleBtn.Text = espEnabled and "Enable" or "Disable"; EspToggleBtn.BackgroundColor3 = espEnabled and Color3.fromRGB(60, 180, 60) or Color3.fromRGB(180, 50, 50) end
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= LP then
+            if espEnabled and p.Character then local hl = Instance.new("Highlight", p.Character); hl.FillColor = Color3.fromRGB(255, 60, 60); hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop; espHighlights[p] = hl
+            elseif not espEnabled and espHighlights[p] then espHighlights[p]:Destroy(); espHighlights[p] = nil end
+        end
+    end
+end)
+
+qpCounters = Instance.new("TextLabel", qpContent)
+qpCounters.Size = UDim2.new(1, 0, 0, 30); qpCounters.BackgroundColor3 = THEMES[CURRENT_THEME].rowBg
+qpCounters.Text = "⏱ Фарм: 00:00:00\n💰 Заработано: 0"; qpCounters.TextColor3 = THEMES[CURRENT_THEME].text; qpCounters.Font = Enum.Font.Code; qpCounters.TextSize = 9
+Instance.new("UICorner", qpCounters).CornerRadius = UDim.new(0, 4)
+
+local addQuickBtn = Instance.new("TextButton", PageQuick)
+addQuickBtn.Size = UDim2.new(1, 0, 0, 40); addQuickBtn.BackgroundColor3 = Color3.fromRGB(60, 180, 60); addQuickBtn.Text = "➕ ДОБАВИТЬ ПАНЕЛЬ"; addQuickBtn.TextColor3 = Color3.new(1,1,1); addQuickBtn.Font = Enum.Font.GothamBold; addQuickBtn.TextSize = 12
+Instance.new("UICorner", addQuickBtn).CornerRadius = UDim.new(0, 6)
+addQuickBtn.MouseButton1Click:Connect(function() QuickPanel.Visible = true end)
+
+--// Циклы обновления счётчиков
+task.spawn(function()
+    while true do
+        task.wait(0.5)
+        local currentFarmTime = autofarm and (tick() - FARM_START_TIME) or farmTimeElapsed
+        local el = math.floor(currentFarmTime)
+        local timeStr = string.format("%02d:%02d:%02d", math.floor(el/3600), math.floor((el%3600)/60), el%60)
+        
+        if updateGold() then
+            if isFarmRunning then
+                farmedGold = currentGold - startGold
+                if farmedGold < 0 then farmedGold = 0 end
+            end
+        end
+        
+        qpCounters.Text = "⏱ Фарм: " .. timeStr .. "\n💰 Заработано: " .. tostring(farmedGold)
+    end
+end)
+
+RunService.Stepped:Connect(function()
+    if noclipEnabled then local c = LP.Character; if c then for _, p in ipairs(c:GetDescendants()) do if p:IsA("BasePart") and p.CanCollide then p.CanCollide = false end end end end
+end)
+
+RunService.RenderStepped:Connect(function(dt)
+    if not flyEnabled then return end
+    local c = LP.Character; local hrp = c and c:FindFirstChild("HumanoidRootPart"); local hum = c and c:FindFirstChildOfClass("Humanoid")
+    if not hrp or not hum then return end
+    hum.PlatformStand = true; hrp.Velocity = Vector3.zero
+    if not lastPos then lastPos = hrp.Position end
+    local camCF = camera.CFrame; local moveDir = Vector3.zero
+    if flyKeys.W then moveDir += camCF.LookVector end; if flyKeys.S then moveDir -= camCF.LookVector end; if flyKeys.A then moveDir -= camCF.RightVector end; if flyKeys.D then moveDir += camCF.RightVector end
+    if flyKeys.Space then moveDir += Vector3.new(0,1,0) end; if flyKeys.Ctrl then moveDir -= Vector3.new(0,1,0) end
+    local newPos = moveDir.Magnitude > 0 and lastPos + moveDir.Unit * FLY_SPEED * dt * 3 or lastPos
+    hrp.CFrame = CFrame.new(newPos, newPos + camCF.LookVector); lastPos = newPos
+end)
+
+--// Минимизация
+local originalSize = MainFrame.Size
+MinimizeBtn.MouseButton1Click:Connect(function()
+    if MainFrame.Size.Y.Offset == 46 then MainFrame.Size = originalSize; ContentHolder.Visible = true; TabBar1.Visible = true; TabBar2.Visible = true; MinimizeBtn.Text = "—"
+    else MainFrame.Size = UDim2.new(0, 320, 0, 46); ContentHolder.Visible = false; TabBar1.Visible = false; TabBar2.Visible = false; MinimizeBtn.Text = "+" end
+end)
+
+--// Смайлик
+local SmileyIcon = Instance.new("TextButton", ScreenGui)
+SmileyIcon.Size = UDim2.new(0, 50, 0, 50); SmileyIcon.Position = MainFrame.Position; SmileyIcon.BackgroundColor3 = THEMES[CURRENT_THEME].accent; SmileyIcon.BorderSizePixel = 0
+SmileyIcon.Text = "😊"; SmileyIcon.Font = Enum.Font.GothamBold; SmileyIcon.TextSize = 28; SmileyIcon.Visible = false; SmileyIcon.Active = true; SmileyIcon.Draggable = true
+Instance.new("UICorner", SmileyIcon).CornerRadius = UDim.new(1, 0)
+CloseBtn.MouseButton1Click:Connect(function() MainFrame.Visible = false; SmileyIcon.Visible = true; SmileyIcon.Position = MainFrame.Position end)
+SmileyIcon.MouseButton1Click:Connect(function() MainFrame.Visible = true; SmileyIcon.Visible = false; MainFrame.Position = SmileyIcon.Position end)
+
+print("[ChillHub] ✅ Загружен (v3.4) - Исправлен фарм конфет!")
